@@ -107,7 +107,9 @@ def page(slapd):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     with pw.sync_playwright() as p:
         browser = p.firefox.launch()
-        ctx = browser.new_context(viewport={"width": 1360, "height": 860}, color_scheme=os.environ.get("UI_SCHEME", "light"))
+        ctx = browser.new_context(
+            viewport={"width": 1360, "height": 860}, color_scheme=os.environ.get("UI_SCHEME", "light")
+        )
         ctx.add_init_script(SHIM)
         pg = ctx.new_page()
         errors = []
@@ -163,7 +165,10 @@ def test_browse_entry_and_search(page, slapd):
     page.wait_for_selector("#tree li.more")
     assert page.locator("#tree .row:has-text('user0')").count() == 500
     page.click("#tree li.more .row")
-    page.wait_for_function("document.querySelectorAll('#tree li.more').length === 1 && document.querySelectorAll('#tree .row[title^=\"uid=user\"]').length === 1000")
+    page.wait_for_function(
+        "document.querySelectorAll('#tree li.more').length === 1"
+        " && document.querySelectorAll('#tree .row[title^=\"uid=user\"]').length === 1000"
+    )
     page.click("#tree li.more .row")
     page.wait_for_function("document.querySelectorAll('#tree .row[title^=\"uid=user\"]').length === 1200")
     assert page.locator("#tree li.more").count() == 0

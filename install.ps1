@@ -50,4 +50,8 @@ Set-Content -Encoding ASCII -Path $Launcher -Value "@echo off`r`n`"$Venv\Scripts
 New-Item -Force -Path $RegKey | Out-Null
 Set-ItemProperty -Path $RegKey -Name "(Default)" -Value $Manifest
 Write-Host "Registered $Manifest"
-Write-Host "Next: about:debugging#/runtime/this-firefox -> Load Temporary Add-on -> $Root\extension\manifest.json"
+if (Test-Path (Join-Path $Root "extension\manifest.json")) {
+  Write-Host "Next: about:debugging#/runtime/this-firefox -> Load Temporary Add-on -> $Root\extension\manifest.json"
+} else {
+  Write-Host "Next: install the LDAP Browser add-on (.xpi) from the same release in Firefox."
+}

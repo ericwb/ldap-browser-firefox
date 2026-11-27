@@ -90,7 +90,9 @@ def test_large_messages_are_chunked():
 
 
 def test_unknown_op_and_hello():
-    inp = io.BytesIO(frame({"id": 1, "op": "hello"}) + frame({"id": 2, "op": "nope"}) + frame({"id": 3, "op": "children"}))
+    inp = io.BytesIO(
+        frame({"id": 1, "op": "hello"}) + frame({"id": 2, "op": "nope"}) + frame({"id": 3, "op": "children"})
+    )
     out = io.BytesIO()
     h.main(inp, out)
     a, b, c = unframe_all(out.getvalue())
@@ -259,7 +261,8 @@ def test_end_to_end_subprocess(slapd):
         if "chunk" in m:
             parts.setdefault(m["id"], []).append(m)
             if len(parts[m["id"]]) == m["of"]:
-                responses.append(json.loads("".join(p["data"] for p in sorted(parts[m["id"]], key=lambda p: p["chunk"]))))
+                ordered = sorted(parts[m["id"]], key=lambda p: p["chunk"])
+                responses.append(json.loads("".join(p["data"] for p in ordered)))
         else:
             responses.append(m)
     assert [r["id"] for r in responses] == [1, 2, 3]

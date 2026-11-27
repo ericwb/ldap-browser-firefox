@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  # Manual runs: with a tag, rebuild that tag and upload to its existing
+  # release; without one, build and package main as a dry run (no upload).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to rebuild and upload to (e.g. v1.0.0). Leave empty for a dry run."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # Secrets can't be tested in a step's `if`, so expose whether they exist.
+      HAS_AMO_CREDENTIALS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - name: Set version from tag
+        if: env.TAG != ''
+        run: |
+          VER="${TAG#v}"
+          # Firefox add-on versions are plain dotted integers (no -rc/-beta).
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' is not a version like v1.2.3"
+            exit 1
+          fi
+          echo "VER=$VER" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Test
+        run: |
+          pip install -r host/requirements.txt pytest
+          pytest -q
+          node --test tests/*.test.mjs
+
+      - name: Package
+        run: scripts/package.sh "${VER:-}"
+
+      - name: Lint packaged add-on
+        run: npx --yes web-ext@10.8.0 lint --source-dir dist/stage/extension --warnings-as-errors
+
+      - name: Smoke test helper bundle
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle"
+          tar -C "$RUNNER_TEMP/bundle" -xzf dist/ldap-browser-helper-*.tar.gz
+          "$RUNNER_TEMP"/bundle/ldap-browser-helper-*/install.sh
+          "$RUNNER_TEMP"/bundle/ldap-browser-helper-*/install.sh --uninstall
+
+      # Optional: sign the add-on on addons.mozilla.org (unlisted) so it can be
+      # installed permanently in release Firefox. Enabled when the AMO API
+      # credentials are stored as repository secrets.
+      - name: Sign add-on (unlisted, AMO)
+        if: env.TAG != '' && env.HAS_AMO_CREDENTIALS == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npx --yes web-ext@10.8.0 sign --channel unlisted \
+            --source-dir dist/stage/extension --artifacts-dir dist/signed \
+            --approval-timeout 1800000
+          cp dist/signed/*.xpi "dist/ldap-browser-$VER-signed.xpi"
+          (cd dist && shasum -a 256 "ldap-browser-$VER-signed.xpi" > "ldap-browser-$VER-signed.xpi.sha256")
+
+      - name: Attest build provenance
+        if: env.TAG != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/ldap-browser-*.xpi
+            dist/ldap-browser-helper-*.tar.gz
+            dist/ldap-browser-helper-*.zip
+
+      - name: Upload to release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/ldap-browser-* --clobber
+
+      - name: Keep as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ldap-browser-${{ env.VER || github.sha }}
+          path: dist/ldap-browser-*

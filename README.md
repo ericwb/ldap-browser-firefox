@@ -38,7 +38,7 @@ connection. Only this add-on's ID is allowed to start the helper.
 
 ## Install
 
-Requires Firefox 115+ and a supported Python release: 3.11 or newer. 3.10 and
+Requires Firefox 140+ (the oldest supported ESR) and a supported Python release: 3.11 or newer. 3.10 and
 older are [end-of-life](https://devguide.python.org/versions/), and the installer
 won't use them.
 
@@ -117,6 +117,32 @@ relays native messages to the real helper, then drives it with Playwright.
 Set `UI_SHOTS=/some/dir` to save screenshots, and `UI_SCHEME=dark` to test
 dark mode.
 
+### CI and releases
+
+- **CI** (`.github/workflows/ci.yml`) runs on pushes to `main`, pull requests,
+  and manual dispatch:
+  - flake8, plus `web-ext lint` and the JS unit tests.
+  - pytest on Python 3.11–3.15 on Ubuntu, macOS and Windows. The slapd
+    integration tests run on Ubuntu (including StartTLS) and macOS, and are
+    skipped on Windows.
+  - The Playwright UI tests, with screenshots kept as an artifact.
+  - The installers on all three OSes.
+- **Releases** (`.github/workflows/release.yml`): publish a GitHub release with
+  a tag such as `v1.2.0`. The workflow stamps that version into the add-on,
+  runs the tests, builds the `.xpi` and the helper bundles (`.tar.gz`/`.zip`)
+  with `scripts/package.sh`, writes SHA-256 files, attests build provenance,
+  and uploads everything to the release. Run it by hand with a tag to rebuild
+  that release, or with no tag for a dry run.
+- **Signed add-on (optional):** add the repository secrets `AMO_JWT_ISSUER` and
+  `AMO_JWT_SECRET` (an API key from
+  [addons.mozilla.org](https://addons.mozilla.org/developers/addon/api/key/)).
+  The release then also gets `ldap-browser-<ver>-signed.xpi`, signed as an
+  unlisted add-on, which release Firefox can install permanently.
+- **Dependency review** checks the dependencies added or changed in each pull
+  request, and fails if any are GPL- or LGPL-licensed.
+
+`scripts/package.sh [version]` builds the same artifacts locally into `dist/`.
+
 ### Layout
 
 ```
@@ -131,6 +157,8 @@ host/
   ldap_browser_host.py   the native helper (ldap3)
   requirements.txt
 install.sh / install.ps1
+scripts/package.sh  release artifacts
+.github/workflows/  CI, release, dependency review
 tests/
 ```
 

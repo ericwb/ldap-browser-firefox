@@ -7,6 +7,7 @@ the `slapd` package) and `openssl`. Tests that need it are skipped otherwise.
 import base64
 import hashlib
 import os
+import re
 import shutil
 import socket
 import ssl
@@ -28,6 +29,34 @@ BASE = "dc=example,dc=test"
 ADMIN = "cn=admin," + BASE
 ADMIN_PW = "s3cret!"
 BULK_USERS = 1200  # more than a 500/1000 page to exercise paging
+
+
+MODULE_DIRS = [
+    "/usr/lib/ldap",  # Debian / Ubuntu
+    "/usr/lib/openldap",
+    "/usr/lib64/openldap",  # Fedora / RHEL
+    "/usr/libexec/openldap",
+    "/usr/local/libexec/openldap",
+    "/opt/homebrew/opt/openldap/libexec/openldap",
+]
+
+
+def _backend(binary):
+    """Pick a database backend that supports paging and hasSubordinates.
+
+    Apple's slapd has bdb built in; current OpenLDAP (2.5+) dropped bdb and
+    ships mdb, often as a loadable module (Debian/Ubuntu)."""
+    proc = subprocess.run([binary, "-VVV"], capture_output=True, text=True)
+    out = proc.stdout + proc.stderr
+    static = out.split("Included static backends:")[-1] if "Included static backends:" in out else ""
+    for name in ("mdb", "bdb", "hdb"):
+        if re.search(rf"^\s*{name}\s*$", static, re.M):
+            return name, []
+    for d in MODULE_DIRS:
+        for name in ("mdb", "bdb"):
+            if any(os.path.exists(f"{d}/back_{name}{ext}") for ext in (".la", ".so")):
+                return name, [f"modulepath {d}", f"moduleload back_{name}"]
+    return "mdb", []
 
 
 def _listening(port):
@@ -176,10 +205,12 @@ def slapd(tmp_path_factory):
         check=True,
         capture_output=True,
     )
+    backend, modules = _backend(binary)
     conf = work / "slapd.conf"
     conf.write_text(
         "\n".join(
-            [
+            modules
+            + [
                 f"include {schema}/core.schema",
                 f"include {schema}/cosine.schema",
                 f"include {schema}/inetorgperson.schema",
@@ -187,7 +218,7 @@ def slapd(tmp_path_factory):
                 f"TLSCertificateFile {cert}",
                 f"TLSCertificateKeyFile {key}",
                 "sizelimit 2000",
-                "database bdb",
+                f"database {backend}",
                 f"directory {db}",
                 f'suffix "{BASE}"',
                 f'rootdn "{ADMIN}"',
@@ -204,7 +235,11 @@ def slapd(tmp_path_factory):
 
     port, tls_port = _free_port(), _free_port()
     proc = subprocess.Popen(
-        [binary, "-f", str(conf), "-h", f"ldap://127.0.0.1:{port}/ ldaps://127.0.0.1:{tls_port}/", "-d", os.environ.get("SLAPD_DEBUG", "0")],
+        [
+            binary, "-f", str(conf),
+            "-h", f"ldap://127.0.0.1:{port}/ ldaps://127.0.0.1:{tls_port}/",
+            "-d", os.environ.get("SLAPD_DEBUG", "0"),
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
