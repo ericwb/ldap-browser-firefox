@@ -139,8 +139,8 @@ dark mode.
   The release then also gets `ldap-browser-<ver>-signed.xpi`, signed as an
   unlisted add-on, which release Firefox can install permanently.
 - **Dependency review** checks the dependencies added or changed in each pull
-  request, and fails if any use a license that can't be combined with
-  GPL-3.0 (GPL-2.0-only).
+  request, and fails if any are strong copyleft (GPL or AGPL), which would
+  conflict with this project's Apache-2.0 license. LGPL, like ldap3's, is allowed.
 
 `scripts/package.sh [version]` builds the same artifacts locally into `dist/`.
 
@@ -196,9 +196,11 @@ because Firefox limits messages from a native host to 1 MB.
 
 ## License
 
-LDAP Browser is free software, licensed under the
-[GNU General Public License v3.0 only](LICENSE) (`GPL-3.0-only`).
+LDAP Browser is licensed under the [Apache License, Version 2.0](LICENSE)
+(`Apache-2.0`). Release v0.1.0 was published under GPL-3.0-only; later
+releases are Apache-2.0.
 
 The helper's dependencies are [ldap3](https://github.com/cannatag/ldap3) (LGPL-3.0),
 [pyasn1](https://github.com/pyasn1/pyasn1) (BSD-2-Clause) and
 [pycryptodome](https://github.com/Legrandin/pycryptodome) (BSD-2-Clause, Unlicense and MIT).
+They aren't bundled: `install.sh`/`install.ps1` install them from PyPI.

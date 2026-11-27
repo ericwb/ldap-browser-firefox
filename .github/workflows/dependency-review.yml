@@ -13,6 +13,6 @@ jobs:
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
         with:
-          # This project is GPL-3.0-only, so (L)GPL dependencies such as ldap3
-          # (LGPL-3.0) are fine; block licenses that can't be combined with it.
-          deny-licenses: GPL-2.0-only
+          # This project is Apache-2.0: block strong-copyleft dependencies.
+          # LGPL (e.g. ldap3) is fine, since it's installed separately, not bundled.
+          deny-licenses: GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later
