@@ -139,9 +139,25 @@ dark mode.
   The release then also gets `ldap-browser-<ver>-signed.xpi`, signed as an
   unlisted add-on, which release Firefox can install permanently.
 - **Dependency review** checks the dependencies added or changed in each pull
-  request, and fails if any are GPL- or LGPL-licensed.
+  request, and fails if any use a license that can't be combined with
+  GPL-3.0 (GPL-2.0-only).
 
 `scripts/package.sh [version]` builds the same artifacts locally into `dist/`.
+
+### Versioning
+
+The release tag is the only place a version is set. To release, create a GitHub
+release with a tag like `v1.2.0` (`gh release create v1.2.0 --generate-notes`).
+The release workflow stamps that version into the add-on's manifest and into
+the helper (`__version__`), and names the artifacts after it.
+
+- Tags must be `vMAJOR.MINOR.PATCH` (or the same without the `v`). Firefox
+  doesn't accept pre-release suffixes such as `-rc1`.
+- In the source tree, both the manifest and the helper always say `0.0.0`,
+  which marks a development build. Don't edit them by hand.
+- The Server tab shows the add-on's and the helper's versions. If a released
+  add-on finds a helper from a different release, the connect page tells you
+  to install the matching helper bundle. Development builds are exempt.
 
 ### Layout
 
@@ -177,3 +193,12 @@ because Firefox limits messages from a native host to 1 MB.
 | `entry`      | `dn` |
 | `search`     | `base, filter, scope (base/one/sub), attributes[], limit` |
 | `rootdse`, `schema`, `disconnect` | none |
+
+## License
+
+LDAP Browser is free software, licensed under the
+[GNU General Public License v3.0 only](LICENSE) (`GPL-3.0-only`).
+
+The helper's dependencies are [ldap3](https://github.com/cannatag/ldap3) (LGPL-3.0),
+[pyasn1](https://github.com/pyasn1/pyasn1) (BSD-2-Clause) and
+[pycryptodome](https://github.com/Legrandin/pycryptodome) (BSD-2-Clause, Unlicense and MIT).

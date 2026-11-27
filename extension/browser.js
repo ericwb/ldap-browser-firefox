@@ -122,7 +122,35 @@ const state = {
   entry: null, // last loaded entry
   searchResults: null,
   schema: null,
+  helper: null, // result of the helper's "hello"
 };
+
+const DEV_VERSION = "0.0.0";
+
+function addonVersion() {
+  try {
+    return browser.runtime.getManifest().version;
+  } catch {
+    return null;
+  }
+}
+
+/** Warn when the add-on and helper come from different releases. */
+function checkVersions(hello) {
+  const addon = addonVersion();
+  const helper = hello && hello.version;
+  const box = $("#version-warning");
+  if (!addon || addon === DEV_VERSION || helper === DEV_VERSION || helper === addon) {
+    box.hidden = true;
+    return;
+  }
+  box.textContent = helper
+    ? `This add-on is version ${addon}, but the installed LDAP helper is version ${helper}. ` +
+      `Install ldap-browser-helper-${addon} from the same release and run its installer.`
+    : `This add-on is version ${addon}, but the installed LDAP helper is from an older release. ` +
+      `Install ldap-browser-helper-${addon} from the same release and run its installer.`;
+  box.hidden = false;
+}
 
 /* =====================================================================
  * Saved connection profiles (browser.storage.local, never passwords)
@@ -870,6 +898,8 @@ function renderServer() {
     ["LDAP versions", pick("supportedLDAPVersion").join(", ")],
     ["SASL mechanisms", pick("supportedSASLMechanisms").join(", ")],
     ["Naming contexts", pick("namingContexts").length || ""],
+    ["LDAP Browser", versionText(addonVersion())],
+    ["Helper", state.helper && `${versionText(state.helper.version)} · Python ${state.helper.python} · ldap3 ${state.helper.ldap3}`],
   ].filter(([, v]) => v !== undefined && v !== null && v !== "");
   $("#server-summary").replaceChildren(
     ...stats.map(([k, v]) => el("div", { class: "stat" }, el("div", { class: "k", text: k }), el("div", { class: "v", text: String(v) }))),
@@ -878,6 +908,11 @@ function renderServer() {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
     .map((k) => renderAttrRow({ name: k, operational: false, values: dse[k].map((v) => ({ v })) }));
   $("#rootdse-body").replaceChildren(...rows);
+}
+
+function versionText(v) {
+  if (!v) return "unknown";
+  return v === DEV_VERSION ? "development build" : `v${v}`;
 }
 
 async function ensureSchema() {
@@ -1113,6 +1148,10 @@ function init() {
   const probe = new LdapHost();
   probe
     .request("hello")
+    .then((hello) => {
+      state.helper = hello;
+      checkVersions(hello);
+    })
     .catch((err) => {
       if (err instanceof HostMissingError) {
         $("#host-missing").hidden = false;

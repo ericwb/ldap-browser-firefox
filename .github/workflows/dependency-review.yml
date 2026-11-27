@@ -13,4 +13,6 @@ jobs:
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
         with:
-          deny-licenses: GPL-2.0-only, GPL-2.0-or-later, GPL-3.0, GPL-3.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later
+          # This project is GPL-3.0-only, so (L)GPL dependencies such as ldap3
+          # (LGPL-3.0) are fine; block licenses that can't be combined with it.
+          deny-licenses: GPL-2.0-only

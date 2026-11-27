@@ -33,6 +33,7 @@ SHIM = """
   window.browser = {
     runtime: {
       getURL: (p) => new URL(p, location.href).href,
+      getManifest: () => ({ version: window.__addonVersion || "0.0.0" }),
       connectNative() {
         const onMsg = [], onDisc = [];
         return {
@@ -41,7 +42,13 @@ SHIM = """
           postMessage(msg) {
             fetch("/native", { method: "POST", body: JSON.stringify(msg) })
               .then((r) => r.json())
-              .then((frames) => frames.forEach((fr) => onMsg.forEach((f) => f(fr))));
+              .then((frames) => frames.forEach((fr) => {
+                // Tests can pretend the helper comes from another release.
+                if (window.__helperVersion && fr.result && fr.result.protocol) {
+                  fr.result.version = window.__helperVersion;
+                }
+                onMsg.forEach((f) => f(fr));
+              }));
           },
           disconnect() {},
         };
@@ -239,3 +246,26 @@ def test_protocol_handler_url_prefills_form(page):
     page.wait_for_function("document.querySelector('input[name=host]').value === 'ldap.example.org'")
     assert page.input_value("select[name=security]") == "starttls"
     assert page.errors == []
+
+
+def test_version_mismatch_warning(page):
+    """A released add-on paired with a helper from another release warns."""
+    page.context.add_init_script("window.__addonVersion = '9.9.9'; window.__helperVersion = '1.0.0'")
+    page.reload()
+    page.wait_for_selector("#version-warning:not([hidden])")
+    text = page.text_content("#version-warning")
+    assert "add-on is version 9.9.9" in text and "helper is version 1.0.0" in text, text
+    assert "ldap-browser-helper-9.9.9" in text
+
+
+def test_matching_release_versions_have_no_warning(page):
+    page.context.add_init_script("window.__addonVersion = '1.0.0'; window.__helperVersion = '1.0.0'")
+    page.reload()
+    page.wait_for_timeout(500)
+    assert page.locator("#version-warning").is_hidden()
+
+
+def test_dev_build_has_no_version_warning(page):
+    page.wait_for_function("window.browser !== undefined")
+    page.wait_for_timeout(500)
+    assert page.locator("#version-warning").is_hidden()

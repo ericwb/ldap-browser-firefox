@@ -7,8 +7,12 @@
 #   *.sha256                            checksums
 #
 # Usage: scripts/package.sh [VERSION]
-# VERSION defaults to the one in extension/manifest.json. The source tree is
-# never modified; the version is stamped into a staged copy of the manifest.
+#
+# Versions come from release tags: the release workflow passes the tag (v1.2.3
+# or 1.2.3). Without an argument, the tag on HEAD is used if there is one,
+# otherwise 0.0.0 (a development build). The version is stamped into staged
+# copies of the add-on manifest and the helper; the source tree is never
+# modified and always says 0.0.0.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +21,8 @@ cd "$ROOT"
 VERSION="${1:-}"
 VERSION="${VERSION#v}"
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')"
+  VERSION="$(git describe --tags --exact-match 2>/dev/null || echo 0.0.0)"
+  VERSION="${VERSION#v}"
 fi
 # Firefox add-on versions are 1-4 dot-separated integers (no pre-release tags).
 if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
@@ -25,7 +30,7 @@ if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
   exit 1
 fi
 
-DIST="$ROOT/dist"
+DIST="${DIST:-$ROOT/dist}"
 STAGE="$DIST/stage"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/extension"
@@ -33,6 +38,7 @@ rm -f "$DIST"/ldap-browser-*
 
 # --- add-on ------------------------------------------------------------------
 cp -R extension/. "$STAGE/extension/"
+cp LICENSE "$STAGE/extension/"
 python3 - "$STAGE/extension/manifest.json" "$VERSION" <<'PY'
 import json, sys
 path, version = sys.argv[1:]
@@ -53,7 +59,15 @@ B="$STAGE/$NAME"
 mkdir -p "$B/host"
 cp install.sh install.ps1 README.md "$B/"
 cp host/ldap_browser_host.py host/requirements.txt "$B/host/"
-[[ -f LICENSE ]] && cp LICENSE "$B/"
+python3 - "$B/host/ldap_browser_host.py" "$VERSION" <<'PY'
+import re, sys
+path, version = sys.argv[1:]
+src = open(path).read()
+src, n = re.subn(r'^__version__ = ".*"$', '__version__ = "%s"' % version, src, count=1, flags=re.M)
+assert n == 1, "__version__ not found in helper"
+open(path, "w").write(src)
+PY
+cp LICENSE "$B/"
 chmod 755 "$B/install.sh"
 find "$B" -exec touch -t 198001010000 {} +
 tar -C "$STAGE" -czf "$DIST/$NAME.tar.gz" "$NAME"
