@@ -25,19 +25,40 @@ if ($Uninstall) {
 # Bump as releases age out: https://devguide.python.org/versions/
 $MinMinor = 11
 
-# The py launcher picks the newest installed Python 3.
-if (Get-Command py -ErrorAction SilentlyContinue) { $Py = @("py", "-3") } else { $Py = @("python") }
-$PyExe, $PyArgs = $Py
-& $PyExe @PyArgs -c "import sys; sys.exit(not (sys.version_info[0] == 3 and sys.version_info[1] >= $MinMinor))"
-if ($LASTEXITCODE -ne 0) {
+# Candidate interpreters, best first: the py launcher (newest installed
+# Python 3), then whatever `python` is on PATH.
+$Candidates = @()
+if (Get-Command py -ErrorAction SilentlyContinue) { $Candidates += ,@("py", "-3") }
+if (Get-Command python -ErrorAction SilentlyContinue) { $Candidates += ,@("python") }
+
+$PyExe = $null
+$PyArgs = @()
+foreach ($c in $Candidates) {
+  $exe = $c[0]
+  $extra = @($c | Select-Object -Skip 1)
+  & $exe @extra -c "import sys; sys.exit(not (sys.version_info[0] == 3 and sys.version_info[1] >= $MinMinor))" 2>$null
+  if ($LASTEXITCODE -eq 0) { $PyExe = $exe; $PyArgs = $extra; break }
+}
+if (-not $PyExe) {
   Write-Error "Python 3.$MinMinor or newer is required; older releases are end-of-life. Install a current Python from python.org."
   exit 1
 }
+$Info = & $PyExe @PyArgs -c "import sys; print(sys.version.split()[0], 'at', sys.executable)"
+Write-Host "Using Python $Info"
+
 if (Test-Path $Venv) { Remove-Item -Recurse -Force $Venv }
 & $PyExe @PyArgs -m venv $Venv
-& "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r (Join-Path $HostDir "requirements.txt")
+if ($LASTEXITCODE -ne 0) { Write-Error "Creating the virtualenv in $Venv failed."; exit 1 }
+$VenvPython = Join-Path $Venv "Scripts\python.exe"
+if (-not (Test-Path $VenvPython)) {
+  Get-ChildItem -Recurse $Venv | Select-Object -First 40 | ForEach-Object { Write-Host $_.FullName }
+  Write-Error "The virtualenv has no $VenvPython."
+  exit 1
+}
+& $VenvPython -m pip install --quiet --disable-pip-version-check -r (Join-Path $HostDir "requirements.txt")
+if ($LASTEXITCODE -ne 0) { Write-Error "Installing the helper's Python packages failed."; exit 1 }
 
-Set-Content -Encoding ASCII -Path $Launcher -Value "@echo off`r`n`"$Venv\Scripts\python.exe`" -I `"$HostDir\ldap_browser_host.py`" %*"
+Set-Content -Encoding ASCII -Path $Launcher -Value "@echo off`r`n`"$VenvPython`" -I `"$HostDir\ldap_browser_host.py`" %*"
 
 @{
   name = $Name
