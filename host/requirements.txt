@@ -1,0 +1,4 @@
+ldap3==2.9.1
+pyasn1==0.6.5
+# MD4 for NTLM binds (removed from modern OpenSSL builds of hashlib)
+pycryptodome==4.6.0

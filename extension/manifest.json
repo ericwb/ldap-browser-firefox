@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "LDAP Browser",
+  "version": "1.0.0",
+  "description": "Browse Active Directory and LDAP directories: tree view, entry details, LDAP filter search and LDIF export.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ldap-browser@ericwb.github.io",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "nativeMessaging",
+    "storage"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "Open LDAP Browser",
+    "default_icon": "icons/icon.svg"
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "omnibox": {
+    "keyword": "ldap"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "ext+ldap",
+      "name": "LDAP Browser",
+      "uriTemplate": "/browser.html#%s"
+    },
+    {
+      "protocol": "ext+ldaps",
+      "name": "LDAP Browser",
+      "uriTemplate": "/browser.html#%s"
+    }
+  ]
+}

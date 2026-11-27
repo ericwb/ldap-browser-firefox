@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LDAP Browser</title>
+  <link rel="icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="browser.css">
+  <script type="module" src="browser.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="icons/icon.svg" alt=""><span>LDAP Browser</span></div>
+    <div id="status" class="status" hidden>
+      <span class="dot"></span>
+      <span id="status-server"></span>
+      <span id="status-vendor" class="chip"></span>
+      <span id="status-tls" class="chip"></span>
+      <span id="status-who" class="who"></span>
+    </div>
+    <div class="spacer"></div>
+    <button id="btn-disconnect" class="ghost" hidden>Disconnect</button>
+  </header>
+
+  <!-- ============================ connect view ============================ -->
+  <main id="view-connect" class="connect-view">
+    <aside class="profiles">
+      <h2>Saved connections</h2>
+      <ul id="profile-list" class="profile-list"></ul>
+      <p id="profile-empty" class="muted small">Connections you save appear here. Passwords are never stored.</p>
+    </aside>
+
+    <section class="card connect-card">
+      <h1>Connect to a directory</h1>
+      <p class="muted">Active Directory, OpenLDAP, 389 Directory Server, FreeIPA or any LDAPv3 server.</p>
+
+      <div id="host-missing" class="banner error" hidden>
+        <strong>The LDAP helper isn't installed.</strong>
+        Firefox extensions can't open LDAP connections themselves, so this add-on uses a small local helper.
+        Run <code>./install.sh</code> from the project folder, then reload this page.
+        <div class="small muted" id="host-missing-detail"></div>
+      </div>
+
+      <form id="connect-form" autocomplete="off">
+        <div class="grid">
+          <label class="span2">Server
+            <input name="host" required placeholder="dc01.corp.example or ldaps://dc01.corp.example">
+          </label>
+          <label>Port
+            <input name="port" type="number" min="1" max="65535" placeholder="389">
+          </label>
+
+          <label>Security
+            <select name="security">
+              <option value="ldaps">LDAPS (TLS)</option>
+              <option value="starttls">StartTLS</option>
+              <option value="none">None (plain text)</option>
+            </select>
+          </label>
+          <label class="check span2" id="verify-wrap">
+            <input type="checkbox" name="verifyCert" checked>
+            Verify the server certificate
+          </label>
+
+          <label class="span3" id="ca-wrap">CA certificate file <span class="muted">(optional, PEM path on this computer)</span>
+            <input name="caFile" placeholder="/path/to/corp-root-ca.pem">
+          </label>
+
+          <label>Authentication
+            <select name="auth">
+              <option value="simple">Simple bind</option>
+              <option value="ntlm">NTLM (Active Directory)</option>
+              <option value="anonymous">Anonymous</option>
+            </select>
+          </label>
+          <label class="span2 cred">User
+            <input name="user" placeholder="user@corp.example, CORP\user or cn=admin,dc=example,dc=com">
+          </label>
+
+          <label class="span2 cred">Password
+            <input name="password" type="password" autocomplete="current-password">
+          </label>
+          <label>Base DN <span class="muted">(optional)</span>
+            <input name="base" placeholder="auto-detect">
+          </label>
+        </div>
+
+        <div id="plain-warning" class="banner warn" hidden>
+          Without TLS, your password and all directory data cross the network in clear text.
+        </div>
+        <div id="connect-error" class="banner error" hidden></div>
+
+        <div class="actions">
+          <button type="submit" id="btn-connect" class="primary">Connect</button>
+          <span class="spacer"></span>
+          <input name="profileName" class="profile-name" placeholder="Connection name">
+          <button type="button" id="btn-save" class="ghost">Save connection</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- ============================ browse view ============================= -->
+  <main id="view-browse" class="browse-view" hidden>
+    <aside class="tree-pane">
+      <div class="tree-toolbar">
+        <input id="goto-dn" placeholder="Go to DN…" spellcheck="false">
+      </div>
+      <ul id="tree" class="tree" role="tree" tabindex="0"></ul>
+    </aside>
+    <div class="splitter" id="splitter"></div>
+
+    <section class="detail-pane">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="entry" class="active">Entry</button>
+        <button role="tab" data-tab="search">Search</button>
+        <button role="tab" data-tab="server">Server</button>
+        <button role="tab" data-tab="schema">Schema</button>
+      </nav>
+
+      <!-- entry -->
+      <div class="tab-panel" data-panel="entry">
+        <div id="entry-empty" class="empty">Select an entry in the tree.</div>
+        <div id="entry" hidden>
+          <div class="entry-head">
+            <span id="entry-icon" class="kind-icon"></span>
+            <div class="entry-title">
+              <h2 id="entry-rdn"></h2>
+              <div class="dn-line"><code id="entry-dn"></code></div>
+              <div id="entry-classes" class="chips"></div>
+            </div>
+          </div>
+          <div class="toolbar">
+            <input id="attr-filter" type="search" placeholder="Filter attributes" spellcheck="false">
+            <label class="check"><input type="checkbox" id="show-operational"> Operational</label>
+            <span class="spacer"></span>
+            <button id="btn-copy-dn" class="ghost">Copy DN</button>
+            <button id="btn-search-here" class="ghost">Search here</button>
+            <button id="btn-ldif" class="ghost">Export LDIF</button>
+            <button id="btn-refresh" class="ghost" title="Reload entry and children">Refresh</button>
+          </div>
+          <table class="attrs">
+            <thead><tr><th>Attribute</th><th>Value</th></tr></thead>
+            <tbody id="attr-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- search -->
+      <div class="tab-panel" data-panel="search" hidden>
+        <form id="search-form" class="search-form">
+          <div class="grid">
+            <label class="span3">Filter
+              <div class="filter-row">
+                <input name="filter" value="(objectClass=*)" spellcheck="false">
+                <select id="filter-presets" aria-label="Filter presets">
+                  <option value="">Presets…</option>
+                </select>
+              </div>
+            </label>
+            <label class="span2">Base DN
+              <input name="base" spellcheck="false">
+            </label>
+            <label>Scope
+              <select name="scope">
+                <option value="sub">Subtree</option>
+                <option value="one">One level</option>
+                <option value="base">Base object</option>
+              </select>
+            </label>
+            <label class="span2">Attributes <span class="muted">(comma separated; blank for common ones)</span>
+              <input name="attributes" spellcheck="false" placeholder="cn, mail, sAMAccountName">
+            </label>
+            <label>Limit
+              <input name="limit" type="number" min="1" max="100000" value="500">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="primary" type="submit" id="btn-search">Search</button>
+            <span id="search-status" class="muted"></span>
+            <span class="spacer"></span>
+            <button type="button" class="ghost" id="btn-export-csv" disabled>Export CSV</button>
+            <button type="button" class="ghost" id="btn-export-ldif" disabled>Export LDIF</button>
+          </div>
+        </form>
+        <div id="search-error" class="banner error" hidden></div>
+        <div class="results-wrap">
+          <table class="results" id="results"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <!-- server -->
+      <div class="tab-panel" data-panel="server" hidden>
+        <div class="server-summary" id="server-summary"></div>
+        <h3>Root DSE</h3>
+        <table class="attrs"><tbody id="rootdse-body"></tbody></table>
+      </div>
+
+      <!-- schema -->
+      <div class="tab-panel" data-panel="schema" hidden>
+        <div class="toolbar">
+          <select id="schema-kind">
+            <option value="objectClasses">Object classes</option>
+            <option value="attributeTypes">Attribute types</option>
+          </select>
+          <input id="schema-filter" type="search" placeholder="Filter schema" spellcheck="false">
+          <span id="schema-count" class="muted"></span>
+        </div>
+        <div class="schema-split">
+          <ul id="schema-list" class="schema-list"></ul>
+          <div id="schema-detail" class="schema-detail empty">Pick a schema element.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+</body>
+</html>

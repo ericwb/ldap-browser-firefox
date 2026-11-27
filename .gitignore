@@ -1,0 +1,8 @@
+host/.venv/
+host/ldap_browser_host
+host/ldap_browser_host.bat
+host/ldap_browser_host.json
+__pycache__/
+.pytest_cache/
+*.xpi
+web-ext-artifacts/
