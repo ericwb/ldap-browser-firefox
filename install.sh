@@ -97,5 +97,9 @@ PY
 
 echo "Registered $MANIFEST"
 echo
-echo "Next: load the extension in Firefox:"
-echo "  about:debugging#/runtime/this-firefox → Load Temporary Add-on… → $ROOT/extension/manifest.json"
+if [[ -f "$ROOT/extension/manifest.json" ]]; then
+  echo "Next: load the extension in Firefox:"
+  echo "  about:debugging#/runtime/this-firefox → Load Temporary Add-on… → $ROOT/extension/manifest.json"
+else
+  echo "Next: install the LDAP Browser add-on (.xpi) from the same release in Firefox."
+fi
