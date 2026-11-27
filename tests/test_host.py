@@ -1,9 +1,12 @@
 import base64
 import io
 import json
+import os
+import shutil
 import struct
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -97,6 +100,7 @@ def test_unknown_op_and_hello():
     h.main(inp, out)
     a, b, c = unframe_all(out.getvalue())
     assert a["ok"] and a["result"]["protocol"] == h.PROTOCOL_VERSION
+    assert a["result"]["version"] == h.__version__ == "0.0.0"  # source tree is always a dev build
     assert not b["ok"] and "Unknown operation" in b["error"]
     assert not c["ok"] and c["error"] == "Not connected."
 
@@ -290,3 +294,26 @@ def test_refuses_end_of_life_python(monkeypatch):
     monkeypatch.setattr(h, "MIN_PYTHON", (sys.version_info[0], sys.version_info[1] + 1))
     with pytest.raises(h.HostError, match="end-of-life"):
         h.handle(h.Session(), {"op": "hello"})
+
+
+@pytest.mark.skipif(sys.platform == "win32" or not shutil.which("zip"), reason="needs bash and zip")
+@pytest.mark.parametrize("arg, want", [("v2.3.4", "2.3.4"), ("1.0.0", "1.0.0")])
+def test_package_stamps_tag_version(tmp_path, arg, want):
+    root = HOST_SCRIPT.parent.parent
+    env = dict(os.environ, DIST=str(tmp_path))
+    subprocess.run(["bash", str(root / "scripts" / "package.sh"), arg], check=True, capture_output=True, env=env)
+    with zipfile.ZipFile(tmp_path / f"ldap-browser-{want}.xpi") as z:
+        assert json.loads(z.read("manifest.json"))["version"] == want
+    helper = (tmp_path / "stage" / f"ldap-browser-helper-{want}" / "host" / "ldap_browser_host.py").read_text()
+    assert f'__version__ = "{want}"' in helper
+    # the source tree is untouched
+    assert json.loads((root / "extension" / "manifest.json").read_text())["version"] == "0.0.0"
+    assert '__version__ = "0.0.0"' in HOST_SCRIPT.read_text()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs bash")
+def test_package_rejects_prerelease_tags(tmp_path):
+    root = HOST_SCRIPT.parent.parent
+    env = dict(os.environ, DIST=str(tmp_path))
+    proc = subprocess.run(["bash", str(root / "scripts" / "package.sh"), "v1.2.3-rc1"], capture_output=True, env=env)
+    assert proc.returncode != 0 and b"not a valid add-on version" in proc.stderr

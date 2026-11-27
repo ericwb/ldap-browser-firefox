@@ -27,6 +27,10 @@ from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars  # noqa: F401  (re-exported for tests)
 from ldap3.utils.dn import parse_dn
 
+# Release version. The source tree always says 0.0.0 (a development build);
+# scripts/package.sh replaces it with the release tag's version.
+__version__ = "0.0.0"
+
 # Oldest Python release still supported upstream (3.10 went end-of-life on
 # 2026-10-01); keep in step with MIN_MINOR in install.sh / install.ps1.
 MIN_PYTHON = (3, 11)
@@ -868,7 +872,12 @@ def handle(session, msg):
         )
     op = msg.get("op")
     if op == "hello":
-        return {"protocol": PROTOCOL_VERSION, "ldap3": ldap3.__version__, "python": sys.version.split()[0]}
+        return {
+            "version": __version__,
+            "protocol": PROTOCOL_VERSION,
+            "ldap3": ldap3.__version__,
+            "python": sys.version.split()[0],
+        }
     if op == "connect":
         return session.connect(msg)
     if op == "disconnect":

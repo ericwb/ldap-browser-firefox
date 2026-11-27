@@ -54,7 +54,15 @@ jobs:
           node --test tests/*.test.mjs
 
       - name: Package
-        run: scripts/package.sh "${VER:-}"
+        run: scripts/package.sh "${VER:-0.0.0}"
+
+      - name: Check stamped versions
+        run: |
+          want="${VER:-0.0.0}"
+          got_ext="$(unzip -p dist/ldap-browser-"$want".xpi manifest.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+          got_host="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import ldap_browser_host as h; print(h.__version__)' dist/stage/ldap-browser-helper-"$want"/host)"
+          echo "add-on $got_ext, helper $got_host, expected $want"
+          [ "$got_ext" = "$want" ] && [ "$got_host" = "$want" ]
 
       - name: Lint packaged add-on
         run: npx --yes web-ext@10.8.0 lint --source-dir dist/stage/extension --warnings-as-errors
