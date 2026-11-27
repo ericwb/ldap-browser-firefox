@@ -38,7 +38,9 @@ connection. Only this add-on's ID is allowed to start the helper.
 
 ## Install
 
-Requires Firefox 115+ and Python 3.8+.
+Requires Firefox 115+ and a supported Python release: 3.11 or newer. 3.10 and
+older are [end-of-life](https://devguide.python.org/versions/), and the installer
+won't use them.
 
 1. Install the helper. This creates `host/.venv`, installs ldap3 into it, and
    registers the helper with Firefox. No admin rights are needed.

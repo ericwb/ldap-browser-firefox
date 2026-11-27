@@ -21,8 +21,20 @@ if ($Uninstall) {
   exit 0
 }
 
-$Python = (Get-Command py -ErrorAction SilentlyContinue)
-if ($Python) { & py -3 -m venv $Venv } else { & python -m venv $Venv }
+# Oldest Python still supported upstream (3.10 reached end-of-life 2026-10-01).
+# Bump as releases age out: https://devguide.python.org/versions/
+$MinMinor = 11
+
+# The py launcher picks the newest installed Python 3.
+if (Get-Command py -ErrorAction SilentlyContinue) { $Py = @("py", "-3") } else { $Py = @("python") }
+$PyExe, $PyArgs = $Py
+& $PyExe @PyArgs -c "import sys; sys.exit(not (sys.version_info[0] == 3 and sys.version_info[1] >= $MinMinor))"
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "Python 3.$MinMinor or newer is required; older releases are end-of-life. Install a current Python from python.org."
+  exit 1
+}
+if (Test-Path $Venv) { Remove-Item -Recurse -Force $Venv }
+& $PyExe @PyArgs -m venv $Venv
 & "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r (Join-Path $HostDir "requirements.txt")
 
 Set-Content -Encoding ASCII -Path $Launcher -Value "@echo off`r`n`"$Venv\Scripts\python.exe`" -I `"$HostDir\ldap_browser_host.py`" %*"

@@ -27,6 +27,10 @@ from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars  # noqa: F401  (re-exported for tests)
 from ldap3.utils.dn import parse_dn
 
+# Oldest Python release still supported upstream (3.10 went end-of-life on
+# 2026-10-01); keep in step with MIN_MINOR in install.sh / install.ps1.
+MIN_PYTHON = (3, 11)
+
 PROTOCOL_VERSION = 1
 # Firefox rejects host->extension messages over 1 MB; stay well under it.
 MAX_MESSAGE = 768 * 1024
@@ -857,6 +861,11 @@ class Session:
 
 
 def handle(session, msg):
+    if sys.version_info[:2] < MIN_PYTHON:
+        raise HostError(
+            "The LDAP helper is running on Python %d.%d, which is end-of-life. Install Python %d.%d "
+            "or newer and re-run install.sh." % (sys.version_info[:2] + MIN_PYTHON)
+        )
     op = msg.get("op")
     if op == "hello":
         return {"protocol": PROTOCOL_VERSION, "ldap3": ldap3.__version__, "python": sys.version.split()[0]}

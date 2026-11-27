@@ -281,3 +281,9 @@ def test_ntlm_md4_available():
 def test_ntlm_requires_domain_user():
     with pytest.raises(h.HostError, match="DOMAIN"):
         h.Session().connect({"host": "x", "auth": "ntlm", "user": "bob", "password": "p"})
+
+
+def test_refuses_end_of_life_python(monkeypatch):
+    monkeypatch.setattr(h, "MIN_PYTHON", (sys.version_info[0], sys.version_info[1] + 1))
+    with pytest.raises(h.HostError, match="end-of-life"):
+        h.handle(h.Session(), {"op": "hello"})

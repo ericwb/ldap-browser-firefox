@@ -30,15 +30,31 @@ if [[ "${1:-}" == "--uninstall" ]]; then
   exit 0
 fi
 
+# Oldest Python release that is still supported upstream (3.10 reached
+# end-of-life on 2026-10-01). Bump this as releases age out:
+# https://devguide.python.org/versions/
+MIN_MINOR=11
+
+supported() {
+  "$1" -c "import sys; sys.exit(not (sys.version_info[0] == 3 and sys.version_info[1] >= $MIN_MINOR))" 2>/dev/null
+}
+
 PYTHON="${PYTHON:-}"
-if [[ -z "$PYTHON" ]]; then
-  for p in python3 python; do
-    if command -v "$p" >/dev/null && "$p" -c 'import sys; sys.exit(sys.version_info < (3, 8))'; then
+if [[ -n "$PYTHON" ]]; then
+  supported "$PYTHON" || { echo "$PYTHON is older than Python 3.$MIN_MINOR (end-of-life). Install a supported Python." >&2; exit 1; }
+else
+  # Prefer the newest installed release.
+  for p in python3.15 python3.14 python3.13 python3.12 python3.11 python3 python; do
+    if command -v "$p" >/dev/null && supported "$p"; then
       PYTHON="$(command -v "$p")"; break
     fi
   done
 fi
-[[ -n "$PYTHON" ]] || { echo "Python 3.8+ is required (set PYTHON=/path/to/python3)." >&2; exit 1; }
+[[ -n "$PYTHON" ]] || {
+  echo "Python 3.$MIN_MINOR or newer is required; older releases are end-of-life." >&2
+  echo "Install a current Python (e.g. 'brew install python' or python.org), or set PYTHON=/path/to/python3." >&2
+  exit 1
+}
 
 echo "Using $("$PYTHON" --version) at $PYTHON"
 "$PYTHON" -m venv "$VENV"
